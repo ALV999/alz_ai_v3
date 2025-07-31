@@ -153,8 +153,7 @@ def streamlit_app():
                 st.subheader("Visualizaciones de EEG")
                 
                 st.write("**Señales Raw EEG (Primeros 5 canales, 10 segundos):**")
-                fig_raw, ax = plt.subplots()
-                output['raw'].plot(duration=10, n_channels=5, show=False, ax=ax)
+                fig_raw = output['raw'].plot(duration=10, n_channels=5, show=False)
                 st.pyplot(fig_raw)
                 
                 st.write("**Power Spectral Density (PSD):**")
@@ -178,6 +177,42 @@ def streamlit_app():
                     st.pyplot(fig_features)
                 else:
                     st.warning("No se encontraron features para graficar por banda.")
+
+                # Histograma de todas las features
+                st.write("**Distribución de Features (Histograma):**")
+                fig_hist, ax = plt.subplots(figsize=(10, 4))
+                output['features_df'].hist(ax=ax, bins=20, color='skyblue', edgecolor='black')
+                plt.tight_layout()
+                st.pyplot(fig_hist)
+
+                # Matriz de correlación
+                st.write("**Matriz de Correlación de Features:**")
+                corr = output['features_df'].corr()
+                fig_corr, ax = plt.subplots(figsize=(8, 6))
+                im = ax.imshow(corr, cmap='coolwarm', aspect='auto')
+                ax.set_title('Correlación entre Features')
+                plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+                st.pyplot(fig_corr)
+
+                # Boxplot de bandas
+                st.write("**Boxplot de Potencias por Banda:**")
+                fig_box, ax = plt.subplots()
+                band_data = [output['features_df'].filter(like=f'abs_power_{band}_').values.flatten() for band in bands]
+                ax.boxplot(band_data, labels=bands)
+                ax.set_xlabel("Banda de Frecuencia")
+                ax.set_ylabel("Potencia Absoluta")
+                ax.set_title("Boxplot de Potencias por Banda")
+                st.pyplot(fig_box)
+
+                # Gráfico de barras de probabilidades de clase
+                st.write("**Probabilidades por Clase Predicha:**")
+                class_probs = output['results']['metrics']['Class Probabilities']
+                fig_probs, ax = plt.subplots()
+                ax.bar(class_probs.keys(), class_probs.values(), color='orange')
+                ax.set_xlabel("Clase")
+                ax.set_ylabel("Probabilidad")
+                ax.set_title("Probabilidades de Clasificación")
+                st.pyplot(fig_probs)
                 
                 st.success("Procesamiento completado.")
 
