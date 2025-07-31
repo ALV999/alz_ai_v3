@@ -181,6 +181,8 @@ def predict_dementia(data, model_dir='assets'):
     if predictor.load_model():
         return predictor.predict(data)
     else:
+        logging.error("No se pudo cargar el modelo en predict_dementia. Retornando None.")
+        return None
         logging.error("No se pudo cargar el modelo para predicción.")
         return None
 
