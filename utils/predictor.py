@@ -9,8 +9,9 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class DementiaPredictor:
-    def __init__(self, model_dir='assets'):  
-        self.model_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), model_dir)
+    def __init__(self, model_dir='assets'):
+        # Usar ruta relativa al workspace actual
+        self.model_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', model_dir))
         self.model = None
         self.scaler = None
         self.label_encoder = None
