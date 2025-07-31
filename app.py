@@ -47,7 +47,7 @@ def main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_di
             logging.warning(f"Edad fuera de rango: {features_df['Age'].iloc[0]}")
         if features_df['Gender'].iloc[0] not in [0, 1]:
             logging.warning(f"Valor de género inesperado: {features_df['Gender'].iloc[0]}")
-    try:
+    # Fin de la validación automática de calidad de datos
         logging.info(f"Cargando datos EEG de {eeg_file_path}")
         if not os.path.exists(eeg_file_path):
             raise FileNotFoundError(f"Archivo EEG no encontrado: {eeg_file_path}")
