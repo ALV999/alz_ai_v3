@@ -1,38 +1,16 @@
 {
-  "feature_names": [
-    "Age",
-    "Gender",
-    "rel_power_beta_T3",
-    "rel_power_theta_P3",
-    "rel_power_theta_F3",
-    "rel_power_alpha_T5",
-    "abs_power_alpha_O2",
-    "rel_power_theta_Fz",
-    "rel_power_alpha_O2",
-    "rel_power_alpha_O1",
-    "abs_power_alpha_T5",
-    "rel_power_theta_T6",
-    "abs_power_alpha_O1",
-    "rel_power_theta_P4",
-    "rel_power_theta_T3",
-    "rel_power_alpha_F4",
-    "rel_power_alpha_T6",
-    "rel_power_alpha_Fp2",
-    "rel_power_alpha_Pz",
-    "abs_power_beta_T5",
-    "rel_power_alpha_F3",
-    "rel_power_theta_O1",
-    "abs_power_theta_F7",
-    "rel_power_theta_O2",
-    "rel_power_theta_Pz",
-    "rel_power_theta_C3",
-    "rel_power_alpha_C4",
-    "rms_O2",
-    "rel_power_theta_F7",
-    "rel_power_alpha_F7",
-    "abs_power_gamma_Fp1"
+  "model_type": "multi_output_neural_network",
+  "input_features": 31,
+  "output_classes": 3,
+  "classes": [
+    "A",
+    "C",
+    "F"
   ],
-  "model_type": "neural_network",
-  "version": "1.0",
-  "trained_on": "2024-07-30"
+  "additional_encoders": {
+    "group": "le_group.pkl",
+    "gender": "le_gender.pkl"
+  },
+  "created_date": "2025-07-31 14:03:34.605399",
+  "tensorflow_version": "2.18.0"
 }
