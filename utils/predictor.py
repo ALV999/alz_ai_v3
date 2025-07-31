@@ -29,6 +29,9 @@ class DementiaPredictor:
             config_path = os.path.join(self.model_dir, 'model_config.json')
             with open(config_path, 'r') as f:
                 self.config = json.load(f)
+                logging.info(f"Configuración cargada: {self.config}")  
+                self.feature_names = self.config['feature_names']
+                logging.info(f"Feature names cargadas: {self.feature_names}")
             logging.info("Configuración cargada.")
         except FileNotFoundError:
             logging.error(f"Error: model_config.json no encontrado en {self.model_dir}")
@@ -109,13 +112,16 @@ class DementiaPredictor:
         return True
 
     def predict(self, data):
-        """Realiza predicción sobre nuevos datos"""
 
         if self.model is None or self.scaler is None or self.label_encoder is None or self.feature_names is None:
             logging.error("Error: El modelo o los preprocesadores no se han cargado correctamente.")
             return None
-
-        # Convertir a DataFrame si es necesario y asegurar nombres de columnas correctos
+        
+        missing_features = set(self.feature_names) - set(features_df.columns)
+        if missing_features:
+            raise ValueError(f"Faltan features en features_df: {missing_features}")
+    
+    
         if isinstance(data, dict):
             data = pd.DataFrame([data])
         elif isinstance(data, np.ndarray):
