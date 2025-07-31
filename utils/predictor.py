@@ -106,6 +106,7 @@ class DementiaPredictor:
         # Log de depuración: Columnas reales de data (segundo log)
         logging.info(f"Columnas en features_df (antes de validación): {list(data.columns) if isinstance(data, pd.DataFrame) else 'Data no es DataFrame'}")
 
+        logging.info(f"Estado antes de predecir: model={'OK' if self.model is not None else 'None'}, scaler={'OK' if self.scaler is not None else 'None'}, label_encoder={'OK' if self.label_encoder is not None else 'None'}, feature_names={'OK' if self.feature_names is not None else 'None'}")
         if self.model is None or self.scaler is None or self.label_encoder is None or self.feature_names is None:
             logging.error("Error: El modelo o los preprocesadores no se han cargado correctamente.")
             return None
