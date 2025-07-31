@@ -19,45 +19,41 @@ def main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_di
         if not os.path.exists(eeg_file_path):
             raise FileNotFoundError(f"Archivo EEG no encontrado: {eeg_file_path}")
         
-        raw = load_eeg_data(eeg_file_path)  # Usa la nueva función para .edf o .set
-        raw.filter(1, 45, fir_design='firwin')
+        raw = load_eeg_data(eeg_file_path)  # Filtro ya aplicado internamente
 
         logging.info("Extrayendo features espectrales...")
         features_df = extract_spectral_features(raw)
         
-        # Log para depuración: Features generadas por EEG
-        logging.info(f"Features EEG generadas: {list(features_df.columns)}")
-        logging.info(f"Número de features EEG: {len(features_df.columns)}")
-        
-        # Encoding de Gender (asumiendo: 'male'=1, 'female'=0, 'other'=2; ajusta basado en tu label_encoder_gender.pkl)
-        gender_map = {'male': 1, 'female': 0, 'other': 2}  # Confirma con tu training data
-        if gender not in gender_map:
-            raise ValueError(f"Género inválido: {gender}. Opciones: {list(gender_map.keys())}")
-        gender_encoded = gender_map[gender]
-        
-        # Agregar features clínicas con nombres CORRECTOS (mayúsculas)
+        # Agregar features clínicas (con encoding para Gender)
         features_df['Age'] = age
-        features_df['Gender'] = gender_encoded
+        gender_map = {'male': 1, 'female': 0}  # Ajusta basado en tu training; asume 1=male, 0=female
+        features_df['Gender'] = gender_map.get(gender.lower(), 0)  # Default 0 si inválido
 
-        # Handling temporal para features missing como 'rms_O2' (imputa 0 si falta; fixea en eeg_utils.py idealmente)
         predictor = DementiaPredictor(model_dir)
         if not predictor.load_model():
             raise RuntimeError("Fallo al cargar el modelo en predictor.py")
         
-        missing_features = set(predictor.feature_names) - set(features_df.columns)
+        # FILTRAR A SOLO LAS FEATURES ESPERADAS (fix principal para mismatch)
+        expected_features = predictor.feature_names
+        logging.info(f"Features esperadas por el modelo: {expected_features}")
+        
+        missing_features = set(expected_features) - set(features_df.columns)
         if missing_features:
-            for missing in missing_features:
-                logging.warning(f"Feature missing: {missing}. Imputando con 0 (temporal).")
-                features_df[missing] = 0.0  # Imputación simple; considera mejor estrategia (e.g., mean de training)
+            logging.warning(f"Faltan features: {missing_features}. Imputando con 0.")
+            for feat in missing_features:
+                features_df[feat] = 0.0
         
-        # Validación final después de imputación
-        missing_after = set(predictor.feature_names) - set(features_df.columns)
-        if missing_after:
-            raise ValueError(f"Faltan features en features_df después de imputación: {missing_after}")
+        extra_features = set(features_df.columns) - set(expected_features)
+        if extra_features:
+            logging.info(f"Eliminando {len(extra_features)} features extras no requeridas.")
         
-        # Log final de features
-        logging.info(f"Features finales para predicción: {list(features_df.columns)}")
-        logging.info(f"Número total de features: {len(features_df.columns)} (esperadas: {len(predictor.feature_names)})")
+        # Seleccionar solo las esperadas, en orden exacto
+        features_df = features_df[expected_features]  # Asegura shape (1, 31)
+        
+        # Validación final
+        if features_df.shape[1] != len(expected_features):
+            raise ValueError(f"Features finales no match: {features_df.shape[1]} vs {len(expected_features)} esperadas.")
+        logging.info(f"Features finales para predicción: {list(features_df.columns)} (Total: {features_df.shape[1]})")
 
         logging.info("Realizando predicción principal...")
         prediction = predict_dementia(features_df, model_dir=model_dir)
@@ -77,67 +73,69 @@ def main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_di
         if use_bootstrap:
             logging.info(f"Calculando bootstrap con {n_bootstraps} iteraciones...")
             bootstrapped_mmse = []
-            # Resamplear solo features EEG (mantener clínicas fijas para consistencia)
+            
+            # Identificar columnas EEG (todas excepto Age y Gender)
             eeg_columns = [col for col in features_df.columns if col not in ['Age', 'Gender']]
+            
             for _ in range(n_bootstraps):
+                # Resample solo features EEG
                 boot_eeg_df = resample(features_df[eeg_columns])
-                boot_df = pd.concat([boot_eeg_df, features_df[['Age', 'Gender']]], axis=1)
+                
+                # Agregar Age y Gender fijos (no resamplear)
+                boot_df = boot_eeg_df.copy()
+                boot_df['Age'] = age
+                boot_df['Gender'] = features_df['Gender'].iloc[0]  # Encoded value
+                
+                # Asegurar orden de expected_features
+                boot_df = boot_df[expected_features]
+                
                 boot_pred = predict_dementia(boot_df, model_dir=model_dir)
                 if boot_pred:
                     bootstrapped_mmse.append(boot_pred['mmse_score'])
             
             if bootstrapped_mmse:
-                lower = np.percentile(bootstrapped_mmse, 2.5)
-                upper = np.percentile(bootstrapped_mmse, 97.5)
-                results['mmse_ic'] = f"[{lower:.2f}, {upper:.2f}]"
-                results['metrics']['Bootstrap Mean MMSE'] = np.mean(bootstrapped_mmse)
+                mmse_mean = np.mean(bootstrapped_mmse)
+                mmse_std = np.std(bootstrapped_mmse)
+                results['mmse_ic'] = f"{mmse_mean:.2f} ± {mmse_std:.2f}"
             else:
-                logging.warning("Bootstrap falló; no se generaron muestras válidas.")
-
-        inputs_used = {'age': age, 'gender': gender}  # Mantén original para PDF
-
-        logging.info("Generando PDF...")
-        pdf_path = generate_pdf(results, subject_name, features_df, inputs_used, output_dir=output_dir)
-        logging.info(f"Proceso completado. PDF en: {pdf_path}")
+                logging.warning("Bootstrap falló en todas las iteraciones.")
+        
+        # Generar PDF
+        pdf_path = os.path.join(output_dir, f"{subject_name}_report.pdf")
+        generate_pdf(results, pdf_path, subject_name, age, gender)
         
         return {
-            'raw': raw,
-            'features_df': features_df,
             'results': results,
-            'pdf_path': pdf_path
+            'pdf_path': pdf_path,
+            'raw': raw,
+            'features_df': features_df
         }
 
     except Exception as e:
-        logging.error(f"Error en el flujo principal: {e}")
+        logging.error(f"Error en main: {str(e)}")
         raise
 
 def streamlit_app():
-    st.title("Predictor de Demencia con EEG")
-    st.write("Usa el sidebar izquierdo para ingresar datos y procesar. Las visualizaciones se mostrarán aquí.")
+    st.title("Alzheimer AI Detector")
 
-    with st.sidebar:
-        st.header("Inputs del Paciente")
-        uploaded_file = st.file_uploader("Sube archivo EEG (.edf o .set)", type=["edf", "set"])
-        subject_name = st.text_input("Nombre/ID del Sujeto", value="Paciente001")
-        age = st.number_input("Edad", min_value=0, max_value=120, value=65)
-        gender = st.selectbox("Género", ["male", "female", "other"], index=0)
-        
-        process_button = st.button("Procesar Predicción")
+    uploaded_file = st.file_uploader("Sube un archivo EEG (.edf o .set)", type=['edf', 'set'])
+    subject_name = st.text_input("Nombre del Sujeto", "Paciente001")
+    age = st.number_input("Edad", min_value=0, max_value=120, value=65)
+    gender = st.selectbox("Género", ["male", "female"])
 
-    if process_button:
+    if st.button("Procesar"):
         if uploaded_file is not None:
+            eeg_file_path = os.path.join("temp", uploaded_file.name)
+            os.makedirs("temp", exist_ok=True)
+            with open(eeg_file_path, "wb") as f:
+                f.write(uploaded_file.getvalue())
+
             try:
-                temp_dir = "temp"
-                os.makedirs(temp_dir, exist_ok=True)
-                eeg_file_path = os.path.join(temp_dir, uploaded_file.name)
-                with open(eeg_file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                output = main(eeg_file_path, subject_name, age, gender, use_bootstrap=True)
                 
-                output = main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_dir='docs', use_bootstrap=True)
-                
-                st.subheader("Resultados de Predicción")
-                st.write(f"**Clasificación:** {output['results']['group']}")
-                st.write(f"**MMSE Score:** {output['results']['mmse']}")
+                st.subheader("Resultados")
+                st.write(f"**Grupo Predicho:** {output['results']['group']}")
+                st.write(f"**Puntaje MMSE Estimado:** {output['results']['mmse']}")
                 st.write(f"**Intervalo de Confianza MMSE:** {output['results']['mmse_ic']}")
                 st.write(f"**Probabilidad:** {output['results']['metrics']['Probability']}")
                 
@@ -187,7 +185,7 @@ if __name__ == "__main__":
         eeg_file = 'assets/test.edf'
         subject = 'Paciente001'
         age = 65
-        gender = 'male'  # Para modo CLI, asegúrate de encoding en main()
+        gender = 'male'
         model_dir = 'assets'
 
         main(eeg_file, subject, age, gender, model_dir=model_dir, use_bootstrap=True)
