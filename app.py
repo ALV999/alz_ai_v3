@@ -21,8 +21,13 @@ def main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_di
         
         raw = load_eeg_data(eeg_file_path)  # Filtro ya aplicado internamente
 
-        logging.info("Extrayendo features espectrales...")
-        features_df = extract_spectral_features(raw)
+        predictor = DementiaPredictor(model_dir)
+        if not predictor.load_model():
+            raise RuntimeError("Fallo al cargar el modelo en predictor.py")
+
+        expected_features = predictor.feature_names
+        logging.info(f"Extrayendo features espectrales con expected_features: {expected_features}")
+        features_df = extract_spectral_features(raw, expected_features=expected_features)
         
         # Agregar features clínicas (con encoding para Gender)
         features_df['Age'] = age
