@@ -113,6 +113,7 @@ class DementiaPredictor:
 
     def predict(self, data):
         """Realiza predicción sobre nuevos datos"""
+        logging.info(f"Columnas en features_df (antes de validación): {list(data.columns)}")
 
         if self.model is None or self.scaler is None or self.label_encoder is None or self.feature_names is None:
             logging.error("Error: El modelo o los preprocesadores no se han cargado correctamente.")
