@@ -34,6 +34,39 @@ def main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_di
         gender_map = {'male': 1, 'female': 0}  # Ajusta basado en tu training; asume 1=male, 0=female
         features_df['Gender'] = gender_map.get(gender.lower(), 0)  # Default 0 si inválido
 
+        # Validación automática de calidad de datos
+        features_df = features_df.fillna(0)
+        outlier_cols = []
+        for col in features_df.columns:
+            col_data = features_df[col]
+            if np.any(np.abs(col_data - col_data.mean()) > 5 * col_data.std()):
+                outlier_cols.append(col)
+        if outlier_cols:
+            logging.warning(f"Outliers detectados en las columnas: {outlier_cols}")
+        if not (0 <= features_df['Age'].iloc[0] <= 120):
+            logging.warning(f"Edad fuera de rango: {features_df['Age'].iloc[0]}")
+        if features_df['Gender'].iloc[0] not in [0, 1]:
+            logging.warning(f"Valor de género inesperado: {features_df['Gender'].iloc[0]}")
+    try:
+        logging.info(f"Cargando datos EEG de {eeg_file_path}")
+        if not os.path.exists(eeg_file_path):
+            raise FileNotFoundError(f"Archivo EEG no encontrado: {eeg_file_path}")
+        
+        raw = load_eeg_data(eeg_file_path)  # Filtro ya aplicado internamente
+
+        predictor = DementiaPredictor(model_dir)
+        if not predictor.load_model():
+            raise RuntimeError("Fallo al cargar el modelo en predictor.py")
+
+        expected_features = predictor.feature_names
+        logging.info(f"Extrayendo features espectrales con expected_features: {expected_features}")
+        features_df = extract_spectral_features(raw, expected_features=expected_features)
+        
+        # Agregar features clínicas (con encoding para Gender)
+        features_df['Age'] = age
+        gender_map = {'male': 1, 'female': 0}  # Ajusta basado en tu training; asume 1=male, 0=female
+        features_df['Gender'] = gender_map.get(gender.lower(), 0)  # Default 0 si inválido
+
         predictor = DementiaPredictor(model_dir)
         if not predictor.load_model():
             raise RuntimeError("Fallo al cargar el modelo en predictor.py")
