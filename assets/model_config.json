@@ -34,6 +34,7 @@
     "rel_power_alpha_Fp1",
     "rel_power_theta_C3",
     "rel_power_alpha_P4",
+    "Age.1",
     "rel_power_delta_O2",
     "rel_power_alpha_F4",
     "rel_power_theta_F4",
@@ -43,7 +44,6 @@
     "abs_power_gamma_Fp1",
     "rel_power_theta_Fp1",
     "rel_power_theta_Pz",
-    "abs_power_beta_O1",
-    "Age.1"
+    "abs_power_beta_O1"
   ]
 }
