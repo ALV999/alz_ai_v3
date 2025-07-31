@@ -61,33 +61,44 @@ def main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_di
         expected_features = predictor.feature_names
         logging.info(f"Extrayendo features espectrales con expected_features: {expected_features}")
         features_df = extract_spectral_features(raw, expected_features=expected_features)
-        
+
         # Agregar features clínicas (con encoding para Gender)
         features_df['Age'] = age
-        gender_map = {'male': 1, 'female': 0}  # Ajusta basado en tu training; asume 1=male, 0=female
-        features_df['Gender'] = gender_map.get(gender.lower(), 0)  # Default 0 si inválido
+        gender_map = {'male': 1, 'female': 0}
+        features_df['Gender'] = gender_map.get(gender.lower(), 0)
 
-        predictor = DementiaPredictor(model_dir)
-        if not predictor.load_model():
-            raise RuntimeError("Fallo al cargar el modelo en predictor.py")
-        
+        # Validación automática de calidad de datos
+        features_df = features_df.fillna(0)
+        outlier_cols = []
+        for col in features_df.columns:
+            col_data = features_df[col]
+            if np.any(np.abs(col_data - col_data.mean()) > 5 * col_data.std()):
+                outlier_cols.append(col)
+        if outlier_cols:
+            logging.warning(f"Outliers detectados en las columnas: {outlier_cols}")
+        if not (0 <= features_df['Age'].iloc[0] <= 120):
+            logging.warning(f"Edad fuera de rango: {features_df['Age'].iloc[0]}")
+        if features_df['Gender'].iloc[0] not in [0, 1]:
+            logging.warning(f"Valor de género inesperado: {features_df['Gender'].iloc[0]}")
+
         # FILTRAR A SOLO LAS FEATURES ESPERADAS (fix principal para mismatch)
         expected_features = predictor.feature_names
         logging.info(f"Features esperadas por el modelo: {expected_features}")
-        
+
         missing_features = set(expected_features) - set(features_df.columns)
         if missing_features:
             logging.warning(f"Faltan features: {missing_features}. Imputando con 0.")
             for feat in missing_features:
                 features_df[feat] = 0.0
-        
+
         extra_features = set(features_df.columns) - set(expected_features)
         if extra_features:
             logging.info(f"Eliminando {len(extra_features)} features extras no requeridas.")
-        
+            features_df = features_df.drop(columns=list(extra_features))
+
         # Seleccionar solo las esperadas, en orden exacto
-        features_df = features_df[expected_features]  # Asegura shape (1, 31)
-        
+        features_df = features_df[expected_features]
+
         # Validación final
         if features_df.shape[1] != len(expected_features):
             raise ValueError(f"Features finales no match: {features_df.shape[1]} vs {len(expected_features)} esperadas.")
