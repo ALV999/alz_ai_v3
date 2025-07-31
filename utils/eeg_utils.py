@@ -45,7 +45,9 @@ def load_and_preprocess_eeg(file_path, file_type='set'):
 
 def extract_spectral_features(raw):
     try:
-        psds, freqs = mne.time_frequency.psd_welch(raw, fmin=0.5, fmax=45, n_fft=512, n_overlap=256, picks='eeg')
+        spectrum = raw.compute_psd(method='welch', fmin=0.5, fmax=45, n_fft=512, n_overlap=256, picks='eeg')
+        psds = spectrum.get_data()
+        freqs = spectrum.freqs
 
         features = {}
         total_power = np.sum(psds, axis=1)  
@@ -82,9 +84,6 @@ def extract_spectral_features(raw):
         raise
 
 def load_eeg_data(file_path):
-    """
-    Carga datos EEG de archivos .edf o .set en un objeto Raw de MNE.
-    """
     ext = os.path.splitext(file_path)[1].lower()
     
     if ext == '.edf':
