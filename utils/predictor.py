@@ -9,7 +9,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class DementiaPredictor:
-    def __init__(self, model_dir='models'):
+    def __init__(self, model_dir='assets'):  # Cambiado a 'assets' asumiendo que es una carpeta separada; ajusta a 'utils' si es necesario
         self.model_dir = os.path.join(os.path.dirname(__file__), model_dir)
         self.model = None
         self.scaler = None
@@ -21,6 +21,7 @@ class DementiaPredictor:
     def load_model(self):
         """Carga el modelo y todos los componentes necesarios"""
         logging.info("Cargando modelo...")
+        logging.info(f"Intentando cargar desde path absoluto: {os.path.abspath(self.model_dir)}")  # Log para depuración en cloud
         # Cargar configuración
         try:
             config_path = os.path.join(self.model_dir, 'model_config.json')
@@ -171,7 +172,7 @@ class DementiaPredictor:
         return results[0] if len(results) == 1 else results
 
 # Función de conveniencia para uso rápido
-def predict_dementia(data, model_dir='models'):
+def predict_dementia(data, model_dir='assets'):  # Cambiado a 'assets' por consistencia; ajusta si es necesario
     """Función simple para predicción rápida"""
     predictor = DementiaPredictor(model_dir)
     if predictor.load_model():
@@ -183,8 +184,8 @@ def predict_dementia(data, model_dir='models'):
 # Ejemplo de uso:
 if __name__ == "__main__":
     # Directorio donde se exportó el modelo
-    # Cambia esto si tu directorio de exportación es diferente
-    model_export_directory = 'dementia_model_production' # O donde hayas guardado los archivos
+    # Cambia esto si tu directorio de exportación es diferente (e.g., 'assets', 'utils', o 'dementia_model_production')
+    model_export_directory = 'assets'  # Actualizado a 'assets' asumiendo esa carpeta; ajusta según tu estructura
 
     predictor = DementiaPredictor(model_export_directory)
 
