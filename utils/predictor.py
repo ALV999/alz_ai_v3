@@ -103,36 +103,38 @@ class DementiaPredictor:
         return True
 
     def predict(self, data):
-        """Realiza predicción sobre nuevos datos"""
-        # Log de depuración: Columnas reales de data (segundo log)
+        """Realiza predicción sobre nuevos datos (robusto y tolerante)"""
         logging.info(f"Columnas en features_df (antes de validación): {list(data.columns) if isinstance(data, pd.DataFrame) else 'Data no es DataFrame'}")
-
         logging.info(f"Estado antes de predecir: model={'OK' if self.model is not None else 'None'}, scaler={'OK' if self.scaler is not None else 'None'}, label_encoder={'OK' if self.label_encoder is not None else 'None'}, feature_names={'OK' if self.feature_names is not None else 'None'}")
         if self.model is None or self.scaler is None or self.label_encoder is None or self.feature_names is None:
             logging.error("Error: El modelo o los preprocesadores no se han cargado correctamente.")
             return None
-        
+
         # Conversión y validación inicial
         if isinstance(data, dict):
             data = pd.DataFrame([data])
         elif isinstance(data, np.ndarray):
             if data.shape[1] != len(self.feature_names):
-                raise ValueError(f"Número incorrecto de features. Esperado: {len(self.feature_names)}, Recibido: {data.shape[1]}")
+                logging.warning(f"Número incorrecto de features. Esperado: {len(self.feature_names)}, Recibido: {data.shape[1]}")
             data = pd.DataFrame(data, columns=self.feature_names)
         elif not isinstance(data, pd.DataFrame):
             raise TypeError("El dato de entrada debe ser un diccionario, un array de NumPy o un DataFrame de Pandas.")
 
-        # Validación de features faltantes (corregido: usa data en lugar de features_df no definido)
+        # Imputar features faltantes con 0 y loggear advertencia
         missing_features = set(self.feature_names) - set(data.columns)
         if missing_features:
-            raise ValueError(f"Faltan features en features_df: {missing_features}")
-    
-        # Asegurar que el DataFrame tenga las columnas esperadas en el orden correcto
-        try:
-            data = data[self.feature_names]
-        except KeyError as e:
-            logging.error(f"Error: Faltan features en los datos de entrada: {e}")
-            return None
+            logging.warning(f"Faltan features en features_df: {missing_features}. Imputando con 0.")
+            for feat in missing_features:
+                data[feat] = 0.0
+
+        # Eliminar features extra y loggear
+        extra_features = set(data.columns) - set(self.feature_names)
+        if extra_features:
+            logging.info(f"Eliminando features extra no requeridas: {extra_features}")
+            data = data.drop(columns=list(extra_features))
+
+        # Asegurar orden correcto
+        data = data[self.feature_names]
 
         # Escalar datos
         try:
@@ -143,7 +145,6 @@ class DementiaPredictor:
 
         # Predicción
         try:
-            # Predict returns a list of outputs for multi-output models
             predictions = self.model.predict(data_scaled, verbose=0)
             class_pred = predictions[0]
             reg_pred = predictions[1]
@@ -153,16 +154,12 @@ class DementiaPredictor:
 
         # Procesar resultados
         results = []
-        # Ensure reg_pred is flattened for consistent processing
         reg_pred_flat = reg_pred.flatten()
-
         for i in range(len(data)):
             predicted_class_idx = np.argmax(class_pred[i])
-            # inverse_transform expects a list-like input
             predicted_class = self.label_encoder.inverse_transform([predicted_class_idx])[0]
             class_probability = np.max(class_pred[i])
-            predicted_mmse = reg_pred_flat[i] # Use flattened prediction
-
+            predicted_mmse = reg_pred_flat[i]
             result = {
                 'classification': predicted_class,
                 'probability': float(class_probability),
@@ -172,7 +169,6 @@ class DementiaPredictor:
                 }
             }
             results.append(result)
-
         return results[0] if len(results) == 1 else results
 
 # Función de conveniencia para uso rápido
