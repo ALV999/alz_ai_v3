@@ -106,9 +106,9 @@ def main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_di
                 logging.warning("Bootstrap falló en todas las iteraciones.")
         
         # Generar PDF
-        pdf_path = os.path.join(output_dir, f"{subject_name}_report.pdf")
-        generate_pdf(results, pdf_path, subject_name, age, gender)
-        
+        inputs_used = {'age': age, 'gender': gender}
+        pdf_path = generate_pdf(results, subject_name, features_df, inputs_used, output_dir=output_dir)
+
         return {
             'results': results,
             'pdf_path': pdf_path,
@@ -123,12 +123,15 @@ def main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_di
 def streamlit_app():
     st.title("Alzheimer AI Detector")
 
-    uploaded_file = st.file_uploader("Sube un archivo EEG (.edf o .set)", type=['edf', 'set'])
-    subject_name = st.text_input("Nombre del Sujeto", "Paciente001")
-    age = st.number_input("Edad", min_value=0, max_value=120, value=65)
-    gender = st.selectbox("Género", ["male", "female"])
+    with st.sidebar:
+        st.header("Inputs")
+        uploaded_file = st.file_uploader("Sube un archivo EEG (.edf o .set)", type=['edf', 'set'])
+        subject_name = st.text_input("Nombre del Sujeto", "Paciente001")
+        age = st.number_input("Edad", min_value=0, max_value=120, value=65)
+        gender = st.selectbox("Género", ["male", "female"])
+        procesar = st.button("Procesar")
 
-    if st.button("Procesar"):
+    if procesar:
         if uploaded_file is not None:
             eeg_file_path = os.path.join("temp", uploaded_file.name)
             os.makedirs("temp", exist_ok=True)
