@@ -9,9 +9,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class DementiaPredictor:
-    def __init__(self, model_dir='assets'):  # Default a 'assets' (carpeta separada); cambia a 'utils' si los archivos están allí. Asegúrate de que coincida con app.py
-        # Cambio mínimo: Subir un nivel al root del repo (desde utils/), luego join con model_dir (e.g., 'assets')
-        # Si los archivos están dentro de utils/, revierte a: os.path.join(os.path.dirname(__file__), model_dir)
+    def __init__(self, model_dir='assets'):  
         self.model_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), model_dir)
         self.model = None
         self.scaler = None
@@ -176,7 +174,7 @@ class DementiaPredictor:
         return results[0] if len(results) == 1 else results
 
 # Función de conveniencia para uso rápido
-def predict_dementia(data, model_dir='assets'):  ¿
+def predict_dementia(data, model_dir='assets'): 
     """Función simple para predicción rápida"""
     predictor = DementiaPredictor(model_dir)
     if predictor.load_model():
