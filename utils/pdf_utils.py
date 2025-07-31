@@ -11,7 +11,6 @@ from io import BytesIO
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 BANDS = {
-    'delta': (1, 4),
     'theta': (4, 8),
     'alpha': (8, 13),
     'beta': (13, 30),
