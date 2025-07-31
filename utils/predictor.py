@@ -9,7 +9,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class DementiaPredictor:
-    def __init__(self, model_dir='assets'):  # Cambiado a 'assets' asumiendo que es una carpeta separada; ajusta a 'utils' si es necesario
+    def __init__(self, model_dir='assets'):  # Default a 'assets' (carpeta separada); cambia a 'utils' si los archivos están allí. Asegúrate de que coincida con app.py
         self.model_dir = os.path.join(os.path.dirname(__file__), model_dir)
         self.model = None
         self.scaler = None
@@ -172,7 +172,7 @@ class DementiaPredictor:
         return results[0] if len(results) == 1 else results
 
 # Función de conveniencia para uso rápido
-def predict_dementia(data, model_dir='assets'):  # Cambiado a 'assets' por consistencia; ajusta si es necesario
+def predict_dementia(data, model_dir='assets'):  # Default a 'assets'; cambia a 'utils' si los archivos están allí
     """Función simple para predicción rápida"""
     predictor = DementiaPredictor(model_dir)
     if predictor.load_model():
@@ -184,8 +184,8 @@ def predict_dementia(data, model_dir='assets'):  # Cambiado a 'assets' por consi
 # Ejemplo de uso:
 if __name__ == "__main__":
     # Directorio donde se exportó el modelo
-    # Cambia esto si tu directorio de exportación es diferente (e.g., 'assets', 'utils', o 'dementia_model_production')
-    model_export_directory = 'assets'  # Actualizado a 'assets' asumiendo esa carpeta; ajusta según tu estructura
+    # Cambia esto si tu directorio de exportación es diferente (e.g., 'assets' o 'utils')
+    model_export_directory = 'assets'  # Default a 'assets'; ajusta según tu estructura de repo
 
     predictor = DementiaPredictor(model_export_directory)
 
