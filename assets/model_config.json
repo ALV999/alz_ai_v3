@@ -32,7 +32,7 @@
     "rel_power_alpha_F7",
     "abs_power_gamma_Fp1"
   ],
-  "model_type": "neural_network",  
-  "version": "1.0",  
-  "trained_on": "2025-07-30" 
+  "model_type": "neural_network",
+  "version": "1.0",
+  "trained_on": "2024-07-30"
 }
