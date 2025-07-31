@@ -9,10 +9,9 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class DementiaPredictor:
-    def __init__(self, model_dir='assets'):  # Default a 'assets' (carpeta separada); cambia a 'utils' si los archivos están allí. Asegúrate de que coincida con app.py
-        # Cambio mínimo: Subir un nivel al root del repo (desde utils/), luego join con model_dir (e.g., 'assets')
-        # Si los archivos están dentro de utils/, revierte a: os.path.join(os.path.dirname(__file__), model_dir)
-        self.model_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), model_dir)
+    def __init__(self, model_dir='assets'):
+        # Usar ruta relativa al workspace actual
+        self.model_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', model_dir))
         self.model = None
         self.scaler = None
         self.label_encoder = None
@@ -24,17 +23,20 @@ class DementiaPredictor:
         """Carga el modelo y todos los componentes necesarios"""
         logging.info("Cargando modelo...")
         logging.info(f"Intentando cargar desde path absoluto: {os.path.abspath(self.model_dir)}")  # Log para depuración en cloud
-        # Cargar configuración
+        # Cargar configuración (solo desde model_config.json; eliminamos carga duplicada de feature_names.json)
         try:
             config_path = os.path.join(self.model_dir, 'model_config.json')
             with open(config_path, 'r') as f:
                 self.config = json.load(f)
                 logging.info(f"Configuración cargada: {self.config}")  
-                self.feature_names = self.config['feature_names']
+                self.feature_names = self.config.get('feature_names', [])  # Usa .get() para default vacío y evitar errores
                 logging.info(f"Feature names cargadas: {self.feature_names}")
-            logging.info("Configuración cargada.")
+                logging.info(f"Número de features esperadas: {len(self.feature_names)}")  # Log corregido y movido aquí para precisión
         except FileNotFoundError:
             logging.error(f"Error: model_config.json no encontrado en {self.model_dir}")
+            return False
+        except KeyError:
+            logging.error("Error: 'feature_names' no encontrado en model_config.json")
             return False
 
         # Cargar modelo (formato .keras)
@@ -85,17 +87,6 @@ class DementiaPredictor:
                 logging.error(f"Error: label_encoder.pkl no encontrado en {self.model_dir}")
                 return False
 
-        # Cargar feature names
-        try:
-            feature_names_path = os.path.join(self.model_dir, 'feature_names.json')
-            with open(feature_names_path, 'r') as f:
-                self.feature_names = json.load(f)
-            logging.info("Nombres de features cargados.")
-            logging.info(f"Features esperadas: {len(self.feature_names)}")
-        except FileNotFoundError:
-            logging.error(f"Error: feature_names.json no encontrado en {self.model_dir}")
-            return False
-
         # Cargar encoders adicionales (e.g., le_gender)
         if 'additional_encoders' in self.config:
             for encoder_name, encoder_file in self.config['additional_encoders'].items():
@@ -112,16 +103,16 @@ class DementiaPredictor:
         return True
 
     def predict(self, data):
+        """Realiza predicción sobre nuevos datos"""
+        # Log de depuración: Columnas reales de data (segundo log)
+        logging.info(f"Columnas en features_df (antes de validación): {list(data.columns) if isinstance(data, pd.DataFrame) else 'Data no es DataFrame'}")
 
+        logging.info(f"Estado antes de predecir: model={'OK' if self.model is not None else 'None'}, scaler={'OK' if self.scaler is not None else 'None'}, label_encoder={'OK' if self.label_encoder is not None else 'None'}, feature_names={'OK' if self.feature_names is not None else 'None'}")
         if self.model is None or self.scaler is None or self.label_encoder is None or self.feature_names is None:
             logging.error("Error: El modelo o los preprocesadores no se han cargado correctamente.")
             return None
         
-        missing_features = set(self.feature_names) - set(features_df.columns)
-        if missing_features:
-            raise ValueError(f"Faltan features en features_df: {missing_features}")
-    
-    
+        # Conversión y validación inicial
         if isinstance(data, dict):
             data = pd.DataFrame([data])
         elif isinstance(data, np.ndarray):
@@ -131,6 +122,11 @@ class DementiaPredictor:
         elif not isinstance(data, pd.DataFrame):
             raise TypeError("El dato de entrada debe ser un diccionario, un array de NumPy o un DataFrame de Pandas.")
 
+        # Validación de features faltantes (corregido: usa data en lugar de features_df no definido)
+        missing_features = set(self.feature_names) - set(data.columns)
+        if missing_features:
+            raise ValueError(f"Faltan features en features_df: {missing_features}")
+    
         # Asegurar que el DataFrame tenga las columnas esperadas en el orden correcto
         try:
             data = data[self.feature_names]
@@ -180,12 +176,14 @@ class DementiaPredictor:
         return results[0] if len(results) == 1 else results
 
 # Función de conveniencia para uso rápido
-def predict_dementia(data, model_dir='assets'):  # Default a 'assets'; cambia a 'utils' si los archivos están allí
+def predict_dementia(data, model_dir='assets'): 
     """Función simple para predicción rápida"""
     predictor = DementiaPredictor(model_dir)
     if predictor.load_model():
         return predictor.predict(data)
     else:
+        logging.error("No se pudo cargar el modelo en predict_dementia. Retornando None.")
+        return None
         logging.error("No se pudo cargar el modelo para predicción.")
         return None
 
@@ -201,9 +199,7 @@ if __name__ == "__main__":
     if predictor.load_model():
         logging.info("\nModelo cargado. Listo para predecir.")
 
-        # Crear datos de ejemplo para la predicción
-        # DEBES REEMPLAZAR ESTO CON DATOS REALES O GENERADOS CORRECTAMENTE
-        # Asegúrate de que las features coincidan EXACTAMENTE con predictor.feature_names
+        
         logging.info(f"Generando datos de ejemplo con {len(predictor.feature_names)} features...")
         # Create a dictionary with dummy data for prediction
         example_data_dict = {feature: 0.1 * (i + 1) for i, feature in enumerate(predictor.feature_names)}

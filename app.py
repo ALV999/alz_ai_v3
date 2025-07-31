@@ -19,22 +19,41 @@ def main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_di
         if not os.path.exists(eeg_file_path):
             raise FileNotFoundError(f"Archivo EEG no encontrado: {eeg_file_path}")
         
-        raw = load_eeg_data(eeg_file_path)  # Usa la nueva función para .edf o .set
-        raw.filter(1, 45, fir_design='firwin')
+        raw = load_eeg_data(eeg_file_path)  # Filtro ya aplicado internamente
 
         logging.info("Extrayendo features espectrales...")
         features_df = extract_spectral_features(raw)
         
-        features_df['age'] = age
-        features_df['gender'] = gender
+        # Agregar features clínicas (con encoding para Gender)
+        features_df['Age'] = age
+        gender_map = {'male': 1, 'female': 0}  # Ajusta basado en tu training; asume 1=male, 0=female
+        features_df['Gender'] = gender_map.get(gender.lower(), 0)  # Default 0 si inválido
 
         predictor = DementiaPredictor(model_dir)
         if not predictor.load_model():
             raise RuntimeError("Fallo al cargar el modelo en predictor.py")
         
-        missing_features = set(predictor.feature_names) - set(features_df.columns)
+        # FILTRAR A SOLO LAS FEATURES ESPERADAS (fix principal para mismatch)
+        expected_features = predictor.feature_names
+        logging.info(f"Features esperadas por el modelo: {expected_features}")
+        
+        missing_features = set(expected_features) - set(features_df.columns)
         if missing_features:
-            raise ValueError(f"Faltan features en features_df: {missing_features}")
+            logging.warning(f"Faltan features: {missing_features}. Imputando con 0.")
+            for feat in missing_features:
+                features_df[feat] = 0.0
+        
+        extra_features = set(features_df.columns) - set(expected_features)
+        if extra_features:
+            logging.info(f"Eliminando {len(extra_features)} features extras no requeridas.")
+        
+        # Seleccionar solo las esperadas, en orden exacto
+        features_df = features_df[expected_features]  # Asegura shape (1, 31)
+        
+        # Validación final
+        if features_df.shape[1] != len(expected_features):
+            raise ValueError(f"Features finales no match: {features_df.shape[1]} vs {len(expected_features)} esperadas.")
+        logging.info(f"Features finales para predicción: {list(features_df.columns)} (Total: {features_df.shape[1]})")
 
         logging.info("Realizando predicción principal...")
         prediction = predict_dementia(features_df, model_dir=model_dir)
@@ -54,64 +73,69 @@ def main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_di
         if use_bootstrap:
             logging.info(f"Calculando bootstrap con {n_bootstraps} iteraciones...")
             bootstrapped_mmse = []
+            
+            # Identificar columnas EEG (todas excepto Age y Gender)
+            eeg_columns = [col for col in features_df.columns if col not in ['Age', 'Gender']]
+            
             for _ in range(n_bootstraps):
-                boot_df = resample(features_df)
+                # Resample solo features EEG
+                boot_eeg_df = resample(features_df[eeg_columns])
+                
+                # Agregar Age y Gender fijos (no resamplear)
+                boot_df = boot_eeg_df.copy()
+                boot_df['Age'] = age
+                boot_df['Gender'] = features_df['Gender'].iloc[0]  # Encoded value
+                
+                # Asegurar orden de expected_features
+                boot_df = boot_df[expected_features]
+                
                 boot_pred = predict_dementia(boot_df, model_dir=model_dir)
                 if boot_pred:
                     bootstrapped_mmse.append(boot_pred['mmse_score'])
             
             if bootstrapped_mmse:
-                lower = np.percentile(bootstrapped_mmse, 2.5)
-                upper = np.percentile(bootstrapped_mmse, 97.5)
-                results['mmse_ic'] = f"[{lower:.2f}, {upper:.2f}]"
-                results['metrics']['Bootstrap Mean MMSE'] = np.mean(bootstrapped_mmse)
+                mmse_mean = np.mean(bootstrapped_mmse)
+                mmse_std = np.std(bootstrapped_mmse)
+                results['mmse_ic'] = f"{mmse_mean:.2f} ± {mmse_std:.2f}"
             else:
-                logging.warning("Bootstrap falló; no se generaron muestras válidas.")
-
-        inputs_used = {'age': age, 'gender': gender}
-
-        logging.info("Generando PDF...")
-        pdf_path = generate_pdf(results, subject_name, features_df, inputs_used, output_dir=output_dir)
-        logging.info(f"Proceso completado. PDF en: {pdf_path}")
+                logging.warning("Bootstrap falló en todas las iteraciones.")
+        
+        # Generar PDF
+        pdf_path = os.path.join(output_dir, f"{subject_name}_report.pdf")
+        generate_pdf(results, pdf_path, subject_name, age, gender)
         
         return {
-            'raw': raw,
-            'features_df': features_df,
             'results': results,
-            'pdf_path': pdf_path
+            'pdf_path': pdf_path,
+            'raw': raw,
+            'features_df': features_df
         }
 
     except Exception as e:
-        logging.error(f"Error en el flujo principal: {e}")
+        logging.error(f"Error en main: {str(e)}")
         raise
 
 def streamlit_app():
-    st.title("Predictor de Demencia con EEG")
-    st.write("Usa el sidebar izquierdo para ingresar datos y procesar. Las visualizaciones se mostrarán aquí.")
+    st.title("Alzheimer AI Detector")
 
-    with st.sidebar:
-        st.header("Inputs del Paciente")
-        uploaded_file = st.file_uploader("Sube archivo EEG (.edf o .set)", type=["edf", "set"])
-        subject_name = st.text_input("Nombre/ID del Sujeto", value="Paciente001")
-        age = st.number_input("Edad", min_value=0, max_value=120, value=65)
-        gender = st.selectbox("Género", ["male", "female", "other"], index=0)
-        
-        process_button = st.button("Procesar Predicción")
+    uploaded_file = st.file_uploader("Sube un archivo EEG (.edf o .set)", type=['edf', 'set'])
+    subject_name = st.text_input("Nombre del Sujeto", "Paciente001")
+    age = st.number_input("Edad", min_value=0, max_value=120, value=65)
+    gender = st.selectbox("Género", ["male", "female"])
 
-    if process_button:
+    if st.button("Procesar"):
         if uploaded_file is not None:
+            eeg_file_path = os.path.join("temp", uploaded_file.name)
+            os.makedirs("temp", exist_ok=True)
+            with open(eeg_file_path, "wb") as f:
+                f.write(uploaded_file.getvalue())
+
             try:
-                temp_dir = "temp"
-                os.makedirs(temp_dir, exist_ok=True)
-                eeg_file_path = os.path.join(temp_dir, uploaded_file.name)
-                with open(eeg_file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                output = main(eeg_file_path, subject_name, age, gender, use_bootstrap=True)
                 
-                output = main(eeg_file_path, subject_name, age, gender, model_dir='assets', output_dir='docs', use_bootstrap=True)
-                
-                st.subheader("Resultados de Predicción")
-                st.write(f"**Clasificación:** {output['results']['group']}")
-                st.write(f"**MMSE Score:** {output['results']['mmse']}")
+                st.subheader("Resultados")
+                st.write(f"**Grupo Predicho:** {output['results']['group']}")
+                st.write(f"**Puntaje MMSE Estimado:** {output['results']['mmse']}")
                 st.write(f"**Intervalo de Confianza MMSE:** {output['results']['mmse_ic']}")
                 st.write(f"**Probabilidad:** {output['results']['metrics']['Probability']}")
                 
@@ -151,6 +175,7 @@ def streamlit_app():
 
             except Exception as e:
                 st.error(f"Error durante el procesamiento: {str(e)}")
+                logging.error(f"Error detallado en Streamlit: {e}")
         else:
             st.error("Por favor, sube un archivo EEG.")
 
