@@ -32,7 +32,6 @@ def load_eeg_data(file_path):
         else:
             raise ValueError(f"Formato no soportado: {ext}. Usa .edf, .set o .csv.")
         
-        # Filtro (movido aquí para centralizar)
         raw.filter(l_freq=0.5, h_freq=45, picks='eeg')
         
         logging.info(f"Archivo EEG cargado: {file_path}. Canales: {raw.ch_names}")
