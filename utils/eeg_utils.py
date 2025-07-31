@@ -80,3 +80,18 @@ def extract_spectral_features(raw):
     except Exception as e:
         logging.error(f"Error extrayendo features: {e}")
         raise
+
+def load_eeg_data(file_path):
+    """
+    Carga datos EEG de archivos .edf o .set en un objeto Raw de MNE.
+    """
+    ext = os.path.splitext(file_path)[1].lower()
+    
+    if ext == '.edf':
+        raw = mne.io.read_raw_edf(file_path, preload=True)
+    elif ext == '.set':
+        raw = mne.io.read_raw_eeglab(file_path, preload=True)
+    else:
+        raise ValueError(f"Formato no soportado: {ext}. Usa .edf o .set.")
+    
+    return raw
